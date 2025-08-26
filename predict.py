@@ -1,8 +1,9 @@
 import tensorflow as tf
 import numpy as np
-from pathlib import Path
 from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
+from pathlib import Path
+from PIL import Image
+import sys
 
 # ----------------------------
 # Configuración
@@ -13,39 +14,50 @@ MODEL_PATH = ARTIFACTS / "dog_breed_classifier.h5"
 LABELS_PATH = ARTIFACTS / "labels.txt"
 
 # ----------------------------
-# Cargar modelo y etiquetas
+# Cargar modelo y labels
 # ----------------------------
 print("📂 Cargando modelo...")
 model = load_model(MODEL_PATH)
-print("✅ Modelo cargado")
 
 with open(LABELS_PATH, "r") as f:
-    class_names = [line.strip() for line in f.readlines()]
+    class_names = [line.strip() for line in f]
 
 # ----------------------------
 # Función para preprocesar imagen
 # ----------------------------
-def preprocess_image(img_path):
-    img = image.load_img(img_path, target_size=(IMG_SIZE, IMG_SIZE))
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = img_array / 255.0
+def preprocess_image(image_path):
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize((IMG_SIZE, IMG_SIZE))
+    img_array = np.array(img) / 255.0  # normaliza
+    img_array = np.expand_dims(img_array, axis=0)  # batch de 1
     return img_array
 
 # ----------------------------
-# Predicción
+# Función para predecir
 # ----------------------------
-img_path = input("📷 Ingrese la ruta de la imagen: ").strip()
-if not Path(img_path).exists():
-    raise FileNotFoundError(f"No se encontró la imagen: {img_path}")
+def predict_image(image_path):
+    img_array = preprocess_image(image_path)
+    predictions = model.predict(img_array)[0]
 
-img_array = preprocess_image(img_path)
+    # Índice con mayor probabilidad
+    top_idx = np.argmax(predictions)
+    top_class = class_names[top_idx]
+    top_conf = predictions[top_idx] * 100
 
-predictions = model.predict(img_array)
-top_5_indices = predictions[0].argsort()[-5:][::-1]  # Mejores 5
-top_5_labels = [(class_names[i], predictions[0][i]) for i in top_5_indices]
+    print(f"\n📸 Imagen: {image_path}")
+    print(f"✅ Predicción principal: {top_class} ({top_conf:.2f}%)")
 
-print("\n✅ Resultados de predicción:")
-for label, prob in top_5_labels:
-    print(f"{label}: {prob:.4f}")
+    # Top 5 predicciones
+    print("\n🔝 Top 5 predicciones:")
+    top_5_idx = predictions.argsort()[-5:][::-1]
+    for idx in top_5_idx:
+        print(f"{class_names[idx]}: {predictions[idx]*100:.2f}%")
 
+# ----------------------------
+# Ejecutar
+# ----------------------------
+if len(sys.argv) < 2:
+    print("❌ Uso: py predict.py imagen1.jpg [imagen2.jpg ...]")
+else:
+    for img_path in sys.argv[1:]:
+        predict_image(img_path)
