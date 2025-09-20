@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Clasificador de Razas de Perro</title>
+</head>
+<body>
+<h2>Subí una imagen de perro y obtené la raza</h2>
+<input type="file" id="imgInput">
+<button onclick="predict()">Predecir</button>
+<p id="resultado"></p>
+
+<script>
+async function predict() {
+    const inputFile = document.getElementById('imgInput').files[0];
+    if(!inputFile) { alert("Selecciona una imagen"); return; }
+
+    const formData = new FormData();
+    formData.append("file", inputFile);
+
+    const response = await fetch("http://localhost:8000/predict", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await response.json();
+    document.getElementById('resultado').innerText =
+        `Raza: ${data.breed} | Confianza: ${data.confidence}%`;
+}
+</script>
+</body>
+</html>
