@@ -3,17 +3,92 @@
 <head>
 <meta charset="UTF-8">
 <title>Clasificador de Razas de Perro</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f5f6fa;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        min-height: 100vh;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h2 {
+        color: #2f3640;
+        margin-bottom: 20px;
+    }
+
+    input[type="file"] {
+        padding: 10px;
+        border: 1px solid #dcdde1;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        cursor: pointer;
+    }
+
+    button {
+        padding: 10px 20px;
+        background-color: #4cd137;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+    }
+
+    button:hover {
+        background-color: #44bd32;
+    }
+
+    #resultado {
+        margin-top: 20px;
+        font-size: 18px;
+        font-weight: bold;
+        color: #192a56;
+    }
+
+    #preview {
+        margin-top: 15px;
+        max-width: 300px;
+        max-height: 300px;
+        border: 2px solid #dcdde1;
+        border-radius: 10px;
+        object-fit: contain;
+    }
+
+    .container {
+        background: white;
+        padding: 30px 40px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+</style>
 </head>
 <body>
-<h2>Subí una imagen de perro y obtené la raza</h2>
-<input type="file" id="imgInput">
-<button onclick="predict()">Predecir</button>
-<p id="resultado"></p>
+<div class="container">
+    <h2>Subí una imagen de perro y obtené la raza</h2>
+    <input type="file" id="imgInput">
+    <br>
+    <img id="preview" src="#" alt="Vista previa" style="display:none;">
+    <br>
+    <button onclick="predict()">Predecir</button>
+    <p id="resultado"></p>
+</div>
 
 <script>
 async function predict() {
     const inputFile = document.getElementById('imgInput').files[0];
     if(!inputFile) { alert("Selecciona una imagen"); return; }
+
+    // Mostrar vista previa
+    const preview = document.getElementById('preview');
+    preview.src = URL.createObjectURL(inputFile);
+    preview.style.display = 'block';
 
     const formData = new FormData();
     formData.append("file", inputFile);
