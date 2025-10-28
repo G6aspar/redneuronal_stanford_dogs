@@ -1,24 +1,19 @@
-# Usamos la imagen oficial de TensorFlow con Python
+# Imagen base con TensorFlow y Python 3.10
 FROM tensorflow/tensorflow:2.12.0
 
-# Directorio de trabajo dentro del contenedor
+# Establecemos el directorio de trabajo
 WORKDIR /app
 
-# Copiamos requirements.txt y lo instalamos
+# Copiamos requirements.txt e instalamos dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiamos la carpeta backend
-COPY backend/ ./backend
-
-# Copiamos la carpeta artifacts (modelo y labels)
-COPY artifacts/ ./artifacts
-
-# Copiamos el frontend si lo necesitas
-COPY frontend/ ./frontend
+# Copiamos el resto del proyecto
+COPY app/ ./app
+COPY run.py .
 
 # Exponemos el puerto 8000
 EXPOSE 8000
 
-# Comando por defecto para ejecutar la app
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando para iniciar Flask
+CMD ["python", "run.py"]
