@@ -9,14 +9,18 @@ import sys
 # Configuración
 # ----------------------------
 IMG_SIZE = 224  # Tamaño esperado por el modelo (el mismo usado en entrenamiento)
-ARTIFACTS = Path(__file__).resolve().parent / "artifacts"  # Carpeta donde guardamos modelo y etiquetas
-MODEL_PATH = ARTIFACTS / "dog_breed_classifier.h5"  # Ruta del modelo entrenado
-LABELS_PATH = ARTIFACTS / "labels.txt"  # Archivo con nombres de razas
+
+# ✅ RUTA CORREGIDA: leer desde app/model/
+PROJECT_ROOT = Path(__file__).resolve().parent  # Carpeta donde está predict.py
+MODEL_DIR = PROJECT_ROOT / "app" / "model"      # → ./app/model/
+
+MODEL_PATH = MODEL_DIR / "dog_breed_classifier.h5"  # Ruta del modelo entrenado
+LABELS_PATH = MODEL_DIR / "labels.txt"              # Archivo con nombres de razas
 
 # ----------------------------
 # Cargar modelo y labels
 # ----------------------------
-print("📂 Cargando modelo...")
+print("📂 Cargando modelo desde:", MODEL_DIR)
 model = load_model(MODEL_PATH)  # Cargamos el modelo previamente entrenado
 
 # Leemos los nombres de las clases (razas) desde labels.txt y los guardamos en una lista
@@ -68,4 +72,3 @@ else:
     # Iteramos por cada imagen pasada como argumento y mostramos la predicción
     for img_path in sys.argv[1:]:
         predict_image(img_path)
-

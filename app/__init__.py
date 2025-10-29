@@ -6,9 +6,9 @@ def create_app():
     app = Flask(__name__)
 
     # Paths del modelo
-    ARTIFACTS = Path(__file__).resolve().parent / "model"
-    MODEL_PATH = ARTIFACTS / "dog_breed_classifier.h5"
-    LABELS_PATH = ARTIFACTS / "labels.txt"
+    MODEL_DIR = Path(__file__).resolve().parent / "model"
+    MODEL_PATH = MODEL_DIR / "dog_breed_classifier.h5"
+    LABELS_PATH = MODEL_DIR / "labels.txt"
 
     # Cargar modelo y etiquetas
     app.model = load_model(MODEL_PATH)
