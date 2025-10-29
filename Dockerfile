@@ -1,19 +1,19 @@
 # Imagen base con TensorFlow y Python 3.10
 FROM tensorflow/tensorflow:2.12.0
 
-# Establecemos el directorio de trabajo
+# Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiamos requirements.txt e instalamos dependencias
+# Copiar requirements e instalar dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiamos el resto del proyecto
-COPY app/ ./app
-COPY run.py .
+# Copiar el resto del código
+COPY . .
 
-# Exponemos el puerto 8000
+# Exponer el puerto
 EXPOSE 8000
 
-# Comando para iniciar Flask
+# Comando por defecto para ejecutar Flask como haces con run.py
 CMD ["python", "run.py"]
+

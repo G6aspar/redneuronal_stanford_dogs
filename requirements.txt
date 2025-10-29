@@ -4,7 +4,7 @@ protobuf==3.20.3
 numpy>=1.22,<1.24
 matplotlib==3.7.1
 Pillow==9.5.0
-uvicorn
-fastapi
-python-multipart
+Flask==2.3.2
+gunicorn==21.2.0
+
 
