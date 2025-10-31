@@ -21,12 +21,16 @@
         margin-bottom: 20px;
     }
 
-    input[type="file"] {
+    input[type="file"],
+    input[type="text"] {
         padding: 10px;
         border: 1px solid #dcdde1;
         border-radius: 5px;
-        margin-bottom: 15px;
-        cursor: pointer;
+        margin: 10px 0;
+        width: 100%;
+        max-width: 300px;
+        font-size: 16px;
+        box-sizing: border-box;
     }
 
     button {
@@ -38,6 +42,14 @@
         cursor: pointer;
         font-size: 16px;
         transition: background 0.3s;
+        margin: 5px;
+    }
+
+    .btn-secondary {
+        background-color: #7f8fa6;
+    }
+    .btn-secondary:hover {
+        background-color: #6b7c93;
     }
 
     button:hover {
@@ -49,6 +61,16 @@
         font-size: 18px;
         font-weight: bold;
         color: #192a56;
+    }
+
+    #correccion-seccion {
+        margin-top: 25px;
+        display: none;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 350px;
     }
 
     #preview {
@@ -66,26 +88,94 @@
         border-radius: 10px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         text-align: center;
+        width: 100%;
+        max-width: 500px;
+    }
+
+    .mensaje {
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 14px;
+        display: none;
+    }
+
+    .exito {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+        display: block !important;
+    }
+
+    .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        display: block !important;
+    }
+
+    #lista-razas {
+        max-height: 150px;
+        overflow-y: auto;
+        margin-top: 10px;
+        padding: 10px;
+        background: #f1f2f6;
+        border-radius: 5px;
+        font-size: 13px;
+        text-align: left;
+        display: none;
     }
 </style>
 </head>
 <body>
 <div class="container">
     <h2>Subí una imagen de perro y obtené la raza</h2>
-    <input type="file" id="imgInput">
+    <input type="file" id="imgInput" accept="image/*">
     <br>
     <img id="preview" src="#" alt="Vista previa" style="display:none;">
     <br>
     <button onclick="predict()">Predecir</button>
     <p id="resultado"></p>
+
+    <!-- Sección de corrección -->
+    <div id="correccion-seccion">
+        <p><strong>¿La predicción es incorrecta?</strong></p>
+        <input type="text" id="razaCorrecta" placeholder="Ej: Golden Retriever">
+        <br>
+        <button onclick="enviarCorreccion()">Enviar corrección</button>
+        <button class="btn-secondary" onclick="mostrarRazas()">Ver razas válidas</button>
+        <br><br>
+        <p>¿Ninguna de las anteriores es correcta?</p>
+        <button class="btn-secondary" onclick="reportarDesconocido()">Reportar raza desconocida</button>
+        
+        <div id="mensaje" class="mensaje"></div>
+        <div id="lista-razas"></div>
+    </div>
 </div>
 
 <script>
+let archivoSubido = null;
+let razasValidas = [];
+
+async function cargarRazas() {
+    try {
+        const res = await fetch('/class_names');
+        if (res.ok) {
+            razasValidas = await res.json();
+        }
+    } catch (e) {
+        console.warn("No se pudieron cargar las razas");
+    }
+}
+
 async function predict() {
     const inputFile = document.getElementById('imgInput').files[0];
-    if(!inputFile) { alert("Selecciona una imagen"); return; }
+    if (!inputFile) { 
+        alert("Selecciona una imagen"); 
+        return; 
+    }
 
-    // Mostrar vista previa
+    archivoSubido = inputFile;
     const preview = document.getElementById('preview');
     preview.src = URL.createObjectURL(inputFile);
     preview.style.display = 'block';
@@ -93,15 +183,120 @@ async function predict() {
     const formData = new FormData();
     formData.append("file", inputFile);
 
-    const response = await fetch("/predict", {
-        method: "POST",
-        body: formData
-    });
+    try {
+        const response = await fetch("/predict", {
+            method: "POST",
+            body: formData
+        });
 
-    const data = await response.json();
-    document.getElementById('resultado').innerText =
-        `Raza: ${data.breed} | Confianza: ${data.confidence}%`;
+        const data = await response.json();
+        const resultado = document.getElementById('resultado');
+        
+        if (data.error) {
+            resultado.innerHTML = `<span style="color:red;">❌ ${data.error}</span>`;
+            return;
+        }
+
+        resultado.innerHTML = `Raza: ${data.breed} | Confianza: ${data.confidence}%`;
+        document.getElementById('correccion-seccion').style.display = 'block';
+        document.getElementById('razaCorrecta').value = '';
+        document.getElementById('mensaje').className = 'mensaje';
+        document.getElementById('lista-razas').style.display = 'none';
+    } catch (err) {
+        document.getElementById('resultado').innerHTML = 
+            '<span style="color:red;">❌ Error de conexión</span>';
+    }
 }
+
+async function enviarCorreccion() {
+    const raza = document.getElementById('razaCorrecta').value.trim();
+    if (!raza) {
+        mostrarMensaje("Por favor, ingresa la raza correcta", "error");
+        return;
+    }
+
+    if (!archivoSubido) {
+        mostrarMensaje("No hay imagen para corregir", "error");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", archivoSubido);
+    formData.append("true_label", raza);
+
+    try {
+        const response = await fetch("/correct", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            mostrarMensaje(data.message, "exito");
+        } else {
+            let msg = data.error || "Error al enviar corrección";
+            if (data.sugerencias && data.sugerencias.length > 0) {
+                msg += "<br><strong>Sugerencias:</strong> " + data.sugerencias.join(", ");
+            }
+            mostrarMensaje(msg, "error");
+        }
+    } catch (err) {
+        mostrarMensaje("Error de conexión al enviar corrección", "error");
+    }
+}
+
+async function reportarDesconocido() {
+    if (!archivoSubido) {
+        alert("No hay imagen para reportar");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", archivoSubido);
+
+    try {
+        const response = await fetch("/report_unknown", {
+            method: "POST",
+            body: formData
+        });
+        const data = await response.json();
+        if (response.ok) {
+            alert(data.message);
+        } else {
+            alert("Error: " + (data.error || "No se pudo reportar"));
+        }
+    } catch (err) {
+        alert("Error de conexión");
+    }
+}
+
+function mostrarRazas() {
+    if (razasValidas.length === 0) {
+        cargarRazas().then(() => {
+            renderizarRazas();
+        });
+    } else {
+        renderizarRazas();
+    }
+}
+
+function renderizarRazas() {
+    const div = document.getElementById('lista-razas');
+    if (razasValidas.length > 0) {
+        div.innerHTML = '<strong>Razas soportadas (' + razasValidas.length + '):</strong><br>' + 
+                        razasValidas.join('<br>');
+        div.style.display = 'block';
+    }
+}
+
+function mostrarMensaje(texto, tipo) {
+    const div = document.getElementById('mensaje');
+    div.innerHTML = texto;
+    div.className = 'mensaje ' + tipo;
+}
+
+// Cargar razas al iniciar
+document.addEventListener('DOMContentLoaded', cargarRazas);
 </script>
 </body>
 </html>
