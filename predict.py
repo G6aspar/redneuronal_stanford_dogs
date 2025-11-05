@@ -51,7 +51,7 @@ def predict_image(image_path):
 
     # Obtenemos el índice de la clase con mayor probabilidad
     top_idx = np.argmax(predictions)
-    top_class = class_names[top_idx]  # Nombre de la clase más probable
+    top_class = class_names[top_idx].split('-', 1)[1] if '-' in class_names[top_idx] else class_names[top_idx]  # Nombre de la clase más probable
     top_conf = predictions[top_idx] * 100  # Convertimos a porcentaje
 
     print(f"\n📸 Imagen: {image_path}")

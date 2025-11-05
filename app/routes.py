@@ -38,6 +38,19 @@ def preprocess_image(img):
     return img_array
 
 
+def clean_breed_name(name):
+    """
+    Convierte 'n02105056-groenendael' en 'groenendael'
+    y formatea con mayúsculas iniciales: 'Groenendael'
+    """
+    if '-' in name:
+        clean = name.split('-', 1)[1].replace('_', ' ')
+    else:
+        clean = name.replace('_', ' ')
+    # Capitalizar palabras: "groenendael" → "Groenendael", "german shepherd" → "German Shepherd"
+    return clean.title()
+
+
 @bp.route("/")
 def home():
     return render_template("index.html")
@@ -54,7 +67,8 @@ def predict():
         tensor = preprocess_image(img)
         preds = current_app.model.predict(tensor)[0]
         top_idx = int(np.argmax(preds))
-        top_class = current_app.class_names[top_idx]
+        raw_class = current_app.class_names[top_idx]
+        top_class = clean_breed_name(raw_class)  # ← ¡Nombre limpio aquí!
         confidence = float(preds[top_idx])
 
         return jsonify({
@@ -67,7 +81,9 @@ def predict():
 
 @bp.route("/class_names")
 def get_class_names():
-    return jsonify(current_app.class_names)
+    # También limpiamos los nombres al devolverlos
+    clean_names = [clean_breed_name(name) for name in current_app.class_names]
+    return jsonify(clean_names)
 
 
 @bp.route("/correct", methods=["POST"])
@@ -81,24 +97,30 @@ def correct():
     if not true_label_input:
         return jsonify({"error": "La etiqueta no puede estar vacía"}), 400
 
-    # Buscar coincidencia insensible a mayúsculas/espacios
-    matching_labels = [
-        name for name in current_app.class_names
-        if name.lower().strip() == true_label_input.lower().strip()
-    ]
+    # Normalizar el input del usuario para comparar con nombres LIMPIOS
+    true_label_clean = true_label_input.lower().strip()
 
-    if not matching_labels:
-        # Sugerir razas similares
+    # Buscar coincidencia entre el input y los nombres LIMPIOS
+    matching_original = None
+    for original_name in current_app.class_names:
+        if clean_breed_name(original_name).lower() == true_label_clean:
+            matching_original = original_name
+            break
+
+    if not matching_original:
+        # Sugerir razas similares (usando nombres limpios)
+        clean_names = [clean_breed_name(n) for n in current_app.class_names]
         sugerencias = [
-            name for name in current_app.class_names
-            if true_label_input.lower().strip() in name.lower()
+            clean_names[i] for i, n in enumerate(current_app.class_names)
+            if true_label_clean in clean_breed_name(n).lower()
         ][:5]
         return jsonify({
             "error": f"Raza '{true_label_input}' no encontrada en el conjunto soportado.",
             "sugerencias": sugerencias
         }), 400
 
-    true_label = matching_labels[0]  # Nombre canónico
+    # Usar el nombre ORIGINAL (con prefijo) para guardar en feedback
+    true_label = matching_original
 
     # Guardar imagen
     ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
@@ -106,7 +128,7 @@ def correct():
     img_path = IMAGES_DIR / img_name
     file.save(img_path)
 
-    # Guardar en CSV
+    # Guardar en CSV con el nombre original (¡importante para reentrenamiento!)
     with open(FEEDBACK_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([str(img_path), true_label])
@@ -114,7 +136,7 @@ def correct():
     # Reentrenar
     retrain_with_feedback(current_app)
 
-    return jsonify({"message": f"✅ Corregido a: {true_label}"}), 200
+    return jsonify({"message": f"✅ Corregido a: {clean_breed_name(true_label)}"}), 200
 
 
 @bp.route("/report_unknown", methods=["POST"])
@@ -160,7 +182,7 @@ def retrain_with_feedback(app, batch_size=8, epochs=1):
             img_array = np.array(img) / 255.0
             images.append(img_array)
 
-            label_idx = app.class_names.index(row["true_label"])
+            label_idx = app.class_names.index(row["true_label"])  # Usa nombre original
             labels.append(label_idx)
         except Exception as e:
             print(f"⚠️ Error procesando {row['image_path']}: {e}")
