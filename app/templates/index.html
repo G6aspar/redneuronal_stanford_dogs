@@ -21,8 +21,7 @@
         margin-bottom: 20px;
     }
 
-    input[type="file"],
-    input[type="text"] {
+    input[type="file"] {
         padding: 10px;
         border: 1px solid #dcdde1;
         border-radius: 5px;
@@ -61,16 +60,6 @@
         font-size: 18px;
         font-weight: bold;
         color: #192a56;
-    }
-
-    #correccion-seccion {
-        margin-top: 25px;
-        display: none;
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        width: 100%;
-        max-width: 350px;
     }
 
     #preview {
@@ -137,20 +126,17 @@
     <button onclick="predict()">Predecir</button>
     <p id="resultado"></p>
 
-    <!-- Sección de corrección -->
-    <div id="correccion-seccion">
-        <p><strong>¿La predicción es incorrecta?</strong></p>
-        <input type="text" id="razaCorrecta" placeholder="Ej: Golden Retriever">
-        <br>
-        <button onclick="enviarCorreccion()">Enviar corrección</button>
+    <!-- Botones adicionales -->
+    <div style="margin-top: 20px; text-align: center;">
         <button class="btn-secondary" onclick="mostrarRazas()">Ver razas válidas</button>
         <br><br>
-        <p>¿Ninguna de las anteriores es correcta?</p>
+        <p>¿No es ninguna de las anteriores?</p>
         <button class="btn-secondary" onclick="reportarDesconocido()">Reportar raza desconocida</button>
-        
-        <div id="mensaje" class="mensaje"></div>
-        <div id="lista-razas"></div>
     </div>
+
+    <!-- Mensajes y lista de razas -->
+    <div id="mensaje" class="mensaje"></div>
+    <div id="lista-razas"></div>
 </div>
 
 <script>
@@ -198,50 +184,12 @@ async function predict() {
         }
 
         resultado.innerHTML = `Raza: ${data.breed} | Confianza: ${data.confidence}%`;
-        document.getElementById('correccion-seccion').style.display = 'block';
-        document.getElementById('razaCorrecta').value = '';
+        // No mostramos sección de corrección — solo el botón de reportar desconocido
         document.getElementById('mensaje').className = 'mensaje';
         document.getElementById('lista-razas').style.display = 'none';
     } catch (err) {
         document.getElementById('resultado').innerHTML = 
             '<span style="color:red;">❌ Error de conexión</span>';
-    }
-}
-
-async function enviarCorreccion() {
-    const raza = document.getElementById('razaCorrecta').value.trim();
-    if (!raza) {
-        mostrarMensaje("Por favor, ingresa la raza correcta", "error");
-        return;
-    }
-
-    if (!archivoSubido) {
-        mostrarMensaje("No hay imagen para corregir", "error");
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", archivoSubido);
-    formData.append("true_label", raza);
-
-    try {
-        const response = await fetch("/correct", {
-            method: "POST",
-            body: formData
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            mostrarMensaje(data.message, "exito");
-        } else {
-            let msg = data.error || "Error al enviar corrección";
-            if (data.sugerencias && data.sugerencias.length > 0) {
-                msg += "<br><strong>Sugerencias:</strong> " + data.sugerencias.join(", ");
-            }
-            mostrarMensaje(msg, "error");
-        }
-    } catch (err) {
-        mostrarMensaje("Error de conexión al enviar corrección", "error");
     }
 }
 
@@ -261,12 +209,12 @@ async function reportarDesconocido() {
         });
         const data = await response.json();
         if (response.ok) {
-            alert(data.message);
+            mostrarMensaje(data.message, "exito");
         } else {
-            alert("Error: " + (data.error || "No se pudo reportar"));
+            mostrarMensaje("Error: " + (data.error || "No se pudo reportar"), "error");
         }
     } catch (err) {
-        alert("Error de conexión");
+        mostrarMensaje("Error de conexión", "error");
     }
 }
 

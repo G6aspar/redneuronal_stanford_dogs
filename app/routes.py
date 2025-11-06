@@ -3,31 +3,16 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 from PIL import Image
 import numpy as np
 import uuid
-import csv
 from pathlib import Path
-import pandas as pd
-import tensorflow as tf
 
 bp = Blueprint("main", __name__)
 
 IMG_SIZE = 224
 
-# Rutas para feedback y desconocidos
+# Ruta para imágenes desconocidas
 MODEL_DIR = Path(__file__).resolve().parent / "model"
-FEEDBACK_DIR = MODEL_DIR / "feedback"
 UNKNOWN_DIR = MODEL_DIR / "unknown"
-
-FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 UNKNOWN_DIR.mkdir(exist_ok=True)
-
-IMAGES_DIR = FEEDBACK_DIR / "images"
-IMAGES_DIR.mkdir(exist_ok=True)
-
-FEEDBACK_CSV = FEEDBACK_DIR / "feedback.csv"
-if not FEEDBACK_CSV.exists():
-    with open(FEEDBACK_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["image_path", "true_label"])
 
 
 def preprocess_image(img):
@@ -39,15 +24,11 @@ def preprocess_image(img):
 
 
 def clean_breed_name(name):
-    """
-    Convierte 'n02105056-groenendael' en 'groenendael'
-    y formatea con mayúsculas iniciales: 'Groenendael'
-    """
+    """Convierte 'n02105056-groenendael' en 'Groenendael'."""
     if '-' in name:
         clean = name.split('-', 1)[1].replace('_', ' ')
     else:
         clean = name.replace('_', ' ')
-    # Capitalizar palabras: "groenendael" → "Groenendael", "german shepherd" → "German Shepherd"
     return clean.title()
 
 
@@ -68,7 +49,7 @@ def predict():
         preds = current_app.model.predict(tensor)[0]
         top_idx = int(np.argmax(preds))
         raw_class = current_app.class_names[top_idx]
-        top_class = clean_breed_name(raw_class)  # ← ¡Nombre limpio aquí!
+        top_class = clean_breed_name(raw_class)
         confidence = float(preds[top_idx])
 
         return jsonify({
@@ -81,62 +62,8 @@ def predict():
 
 @bp.route("/class_names")
 def get_class_names():
-    # También limpiamos los nombres al devolverlos
     clean_names = [clean_breed_name(name) for name in current_app.class_names]
     return jsonify(clean_names)
-
-
-@bp.route("/correct", methods=["POST"])
-def correct():
-    if "file" not in request.files or "true_label" not in request.form:
-        return jsonify({"error": "Falta imagen o etiqueta correcta"}), 400
-
-    file = request.files["file"]
-    true_label_input = request.form["true_label"].strip()
-
-    if not true_label_input:
-        return jsonify({"error": "La etiqueta no puede estar vacía"}), 400
-
-    # Normalizar el input del usuario para comparar con nombres LIMPIOS
-    true_label_clean = true_label_input.lower().strip()
-
-    # Buscar coincidencia entre el input y los nombres LIMPIOS
-    matching_original = None
-    for original_name in current_app.class_names:
-        if clean_breed_name(original_name).lower() == true_label_clean:
-            matching_original = original_name
-            break
-
-    if not matching_original:
-        # Sugerir razas similares (usando nombres limpios)
-        clean_names = [clean_breed_name(n) for n in current_app.class_names]
-        sugerencias = [
-            clean_names[i] for i, n in enumerate(current_app.class_names)
-            if true_label_clean in clean_breed_name(n).lower()
-        ][:5]
-        return jsonify({
-            "error": f"Raza '{true_label_input}' no encontrada en el conjunto soportado.",
-            "sugerencias": sugerencias
-        }), 400
-
-    # Usar el nombre ORIGINAL (con prefijo) para guardar en feedback
-    true_label = matching_original
-
-    # Guardar imagen
-    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-    img_name = f"{uuid.uuid4().hex}.{ext}"
-    img_path = IMAGES_DIR / img_name
-    file.save(img_path)
-
-    # Guardar en CSV con el nombre original (¡importante para reentrenamiento!)
-    with open(FEEDBACK_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([str(img_path), true_label])
-
-    # Reentrenar
-    retrain_with_feedback(current_app)
-
-    return jsonify({"message": f"✅ Corregido a: {clean_breed_name(true_label)}"}), 200
 
 
 @bp.route("/report_unknown", methods=["POST"])
@@ -157,61 +84,3 @@ def report_unknown():
     return jsonify({
         "message": "¡Gracias! Tu imagen se guardó para futuras mejoras del modelo."
     }), 200
-
-
-def retrain_with_feedback(app, batch_size=8, epochs=1):
-    """Reentrena el modelo con los ejemplos de feedback acumulados."""
-    if not FEEDBACK_CSV.exists():
-        return
-
-    try:
-        df = pd.read_csv(FEEDBACK_CSV)
-        if df.empty or len(df) == 0:
-            return
-    except Exception as e:
-        print(f"⚠️ Error leyendo feedback.csv: {e}")
-        return
-
-    images = []
-    labels = []
-
-    for _, row in df.iterrows():
-        try:
-            img = Image.open(row["image_path"]).convert("RGB")
-            img = img.resize((IMG_SIZE, IMG_SIZE))
-            img_array = np.array(img) / 255.0
-            images.append(img_array)
-
-            label_idx = app.class_names.index(row["true_label"])  # Usa nombre original
-            labels.append(label_idx)
-        except Exception as e:
-            print(f"⚠️ Error procesando {row['image_path']}: {e}")
-            continue
-
-    if not images:
-        return
-
-    x_feedback = np.array(images)
-    y_feedback = np.array(labels)
-
-    # Compilar con learning rate muy bajo
-    app.model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"]
-    )
-
-    # Entrenar
-    app.model.fit(
-        x_feedback,
-        y_feedback,
-        epochs=epochs,
-        batch_size=batch_size,
-        verbose=0
-    )
-
-    # Guardar modelo actualizado
-    MODEL_PATH = MODEL_DIR / "dog_breed_classifier.h5"
-    app.model.save(MODEL_PATH)
-
-    print(f"✅ Modelo reentrenado con {len(images)} ejemplos de feedback.")
